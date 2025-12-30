@@ -1,0 +1,81 @@
+name = "sujal-newsletter"
+main = "src/index.js"
+compatibility_date = "2024-12-31"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[triggers]
+crons = [
+  "0 */6 * * *"  # Every 6 hours for newsletter checks
+]
+
+[[kv_namespaces]]
+binding = "KV"
+id = "REPLACE_WITH_YOUR_KV_ID"
+preview_id = "REPLACE_WITH_YOUR_KV_ID"
+
+[[d1_databases]]
+binding = "D1"
+database_name = "newsletter_data"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+
+[vars]
+# System Configuration
+WORKER_VERSION = "2.0.0"
+
+# Email Provider Configuration
+EMAIL_PROVIDER = "gmail"
+
+# Gmail SMTP Configuration
+GMAIL_HOST = "smtp.gmail.com"
+GMAIL_PORT = 587
+
+# Common Email Configuration
+EMAIL_FROM_NAME = "Sujal Gupta's Tech Newsletter"
+
+# RSS Feed Configuration - CHANGE THIS TO YOUR RSS FEED
+RSS_FEED_URL = "https://sujal2048.github.io/index.xml"
+USER_AGENT = "Sujal-Newsletter-Bot/2.0"
+FETCH_TIMEOUT_MS = 60000
+
+# Gmail Rate Limiting Configuration
+GMAIL_DAILY_LIMIT = 490
+GMAIL_PER_MINUTE_LIMIT = 20
+BATCH_SIZE = 95
+BATCH_WAIT_MINUTES = 3
+MAX_POSTS_PER_RUN = 1
+
+# KV Storage Prefixes
+PREFIX_SUBSCRIBER = "subscriber"
+PREFIX_EMAIL_QUEUE = "email-queue"
+PREFIX_NEWSLETTER_SENT = "newsletter-sent"
+PREFIX_NEWSLETTER_SENT_URL = "newsletter-sent-url"
+PREFIX_CONTACT = "contact"
+PREFIX_CAPTCHA = "captcha"
+
+# URL Paths
+SUBSCRIBE_WEB_PATH = "/subscribe"
+SUBSCRIBE_API_PATH = "/api/subscribe"
+UNSUBSCRIBE_WEB_PATH = "/unsubscribe"
+UNSUBSCRIBE_API_PATH = "/api/unsubscribe"
+CONTACT_WEB_PATH = "/contact"
+CONTACT_API_PATH = "/api/contact"
+
+# Site Configuration - CHANGE THESE
+SITE_URL = "https://sujal2048.github.io"
+UNSUBSCRIBE_URL = "https://sujal2048.github.io"
+SITE_OWNER = "Sujal Gupta"
+GITHUB_REPO_URL = "https://github.com/sujal2048/sujal2048.github.io"
+
+# Turnstile Configuration
+TURNSTILE_API_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js"
+TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+# Retry Configuration
+RETRY_MAX_ATTEMPTS = 3
+RETRY_INITIAL_DELAY = 1000
+
+# Rate Limiters
+[[ratelimits]]
+name = "GLOBAL_RATE_LIMITER"
+namespace_id = "1001
