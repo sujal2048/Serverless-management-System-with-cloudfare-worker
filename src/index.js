@@ -1,437 +1,764 @@
-// src/index.js - Minimal working version
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
-    const path = url.pathname;
-    
-    // Homepage
-    if (path === '/') {
-      return new Response(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Sujal's Newsletter System</title>
-          <style>
-            body { font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px; }
-            .card { background: #f5f5f5; padding: 30px; border-radius: 12px; margin: 20px 0; }
-            .btn { display: inline-block; padding: 12px 24px; margin: 10px 5px; text-decoration: none; border-radius: 6px; font-weight: bold; }
-            .btn-primary { background: #4f46e5; color: white; }
-            .btn-danger { background: #ef4444; color: white; }
-            .btn-success { background: #10b981; color: white; }
-          </style>
-        </head>
-        <body>
-          <h1>📬 Sujal's Newsletter System</h1>
-          <p>Welcome to the newsletter system for <strong>${env.SITE_OWNER}</strong></p>
-          
-          <div class="card">
-            <h2>Quick Links</h2>
-            <a href="/subscribe" class="btn btn-primary">Subscribe</a>
-            <a href="/unsubscribe" class="btn btn-danger">Unsubscribe</a>
-            <a href="/contact" class="btn btn-success">Contact</a>
-            <a href="/status" class="btn">System Status</a>
-          </div>
-          
-          <div class="card">
-            <h2>System Info</h2>
-            <p><strong>Version:</strong> ${env.WORKER_VERSION}</p>
-            <p><strong>RSS Feed:</strong> <a href="${env.RSS_FEED_URL}">${env.RSS_FEED_URL}</a></p>
-            <p><strong>Blog URL:</strong> <a href="${env.SITE_URL}">${env.SITE_URL}</a></p>
-            <p><strong>Environment:</strong> ${env.ENVIRONMENT}</p>
-          </div>
-        </body>
-        </html>
-      `, { headers: { 'Content-Type': 'text/html' } });
+/**
+ * Main Entry Point for Cloudflare Workers Newsletter & Contact Management System
+ *
+ * This modular system handles:
+ * - Newsletter subscriptions and email delivery
+ * - Contact form submissions
+ * - Automated RSS feed monitoring
+ * - Weekly maintenance and backups
+ */
+
+import { buildConfig, isConfigValid } from './config/config.js';
+import { handleSubscribe } from './newsletter/frontend/subscribe.js';
+import { handleUnsubscribe } from './newsletter/frontend/unsubscribe.js';
+import { dailyRun } from './newsletter/backend/processor.js';
+import { handleContact } from './contact/frontend.js';
+// Cleanup and backup imports removed - TTL handles cleanup and D1 handles persistence
+import { protectRequest, verifyTurnstileToken } from './middleware/protection.js';
+import { handleStatus } from './pages/status.js';
+import { handleAdminPanel } from './pages/admin.js';
+import { checkNativeAdminRateLimit, checkNativeNewsletterCheckLimit } from './utils/nativeRateLimit.js';
+
+/**
+ * Admin endpoints are now protected by Turnstile CAPTCHA
+ * Additional protection can be added via Cloudflare Zero Trust
+ */
+
+/**
+ * Main fetch handler for HTTP requests
+ */
+async function handleFetch(request, env, ctx) {
+  const config = buildConfig(env);
+  const url = new URL(request.url);
+
+  // Apply protection middleware (rate limiting, bot detection)
+  const protectionResponse = await protectRequest(request, env, config);
+
+  // If protection middleware returns a response, use it (rate limited or challenge)
+  if (protectionResponse) {
+    // Check if user has valid Turnstile token in cookie
+    const hasValidToken = await verifyTurnstileToken(request, config);
+    if (!hasValidToken) {
+      return protectionResponse;
     }
-    
-    // Subscribe page
-    if (path === '/subscribe') {
-      return serveSubscribePage(env);
+    // User passed challenge, allow request to continue
+  }
+
+  // Validate configuration on first request
+  const configValidation = isConfigValid(config);
+  if (!configValidation.valid) {
+    console.error('Configuration is invalid:', configValidation.errors);
+
+    // Show detailed error only on debug endpoint
+    if (url.pathname === '/debug') {
+      return new Response(JSON.stringify({
+        error: 'Configuration errors',
+        errors: configValidation.errors
+      }, null, 2), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
-    
-    // Unsubscribe page
-    if (path === '/unsubscribe') {
-      return serveUnsubscribePage(env);
-    }
-    
-    // Contact page
-    if (path === '/contact') {
-      return serveContactPage(env);
-    }
-    
-    // Status page
-    if (path === '/status') {
-      return Response.json({
-        status: 'operational',
-        version: env.WORKER_VERSION,
-        timestamp: new Date().toISOString(),
-        endpoints: {
-          home: '/',
-          subscribe: '/subscribe',
-          unsubscribe: '/unsubscribe',
-          contact: '/contact',
-          rss_feed: env.RSS_FEED_URL
+
+    // For all other endpoints, return a generic error
+    return new Response('Service configuration error. Please contact administrator.', {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' }
+    });
+  }
+
+  // Route requests to appropriate handlers
+  try {
+    // Handle robots.txt
+    if (url.pathname === '/robots.txt') {
+      return new Response(`# Robots.txt for Cloudflare Workers Newsletter & Contact Management System
+# This site is for private use only via iframe embedding
+
+# Block all search engine crawlers
+User-agent: *
+Disallow: /
+Crawl-delay: 86400
+
+# Block specific known bots
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /
+
+User-agent: Slurp
+Disallow: /
+
+User-agent: DuckDuckBot
+Disallow: /
+
+User-agent: Baiduspider
+Disallow: /
+
+User-agent: YandexBot
+Disallow: /
+
+# Block AI crawlers
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+# Block SEO and analysis bots
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+# No sitemap available
+Sitemap:`, {
+        headers: {
+          'Content-Type': 'text/plain',
+          'Cache-Control': 'public, max-age=86400',
+          'X-Robots-Tag': 'noindex, nofollow, noarchive, nosnippet, noimageindex'
         }
       });
     }
-    
-    // API: Subscribe
-    if (path === '/api/subscribe' && request.method === 'POST') {
-      return handleSubscribe(request, env);
+
+    // Newsletter Subscribe
+    if (url.pathname.startsWith(config.SUBSCRIBE_WEB_PATH) ||
+        url.pathname.startsWith(config.SUBSCRIBE_API_PATH)) {
+      return await handleSubscribe(request, env, config, ctx);
     }
-    
-    // API: Unsubscribe
-    if (path === '/api/unsubscribe' && request.method === 'POST') {
-      return handleUnsubscribe(request, env);
+
+    // Newsletter Unsubscribe
+    if (url.pathname.startsWith(config.UNSUBSCRIBE_WEB_PATH) ||
+        url.pathname.startsWith(config.UNSUBSCRIBE_API_PATH)) {
+      return await handleUnsubscribe(request, env, config);
     }
-    
-    // API: Contact
-    if (path === '/api/contact' && request.method === 'POST') {
-      return handleContact(request, env);
+
+    // Contact Form
+    if (url.pathname.startsWith(config.CONTACT_WEB_PATH) ||
+        url.pathname.startsWith(config.CONTACT_API_PATH)) {
+      return await handleContact(request, env, config, ctx);
     }
-    
-    // API: Check RSS (for testing)
-    if (path === '/api/check-rss') {
-      try {
-        const response = await fetch(env.RSS_FEED_URL);
-        const text = await response.text();
-        return Response.json({
-          success: true,
-          length: text.length,
-          isXml: text.includes('<?xml'),
-          firstLine: text.split('\n')[0]
+
+    // ====================
+    // ADMIN ROUTES - All under /admin/* path
+    // Protected by Turnstile and can be further protected with Cloudflare Zero Trust
+    // ====================
+
+    // Admin panel (with Turnstile protection)
+    if (url.pathname === '/admin') {
+      return await handleAdminPanel(request, env, config);
+    }
+
+    // Admin API endpoints (require authentication)
+    if (url.pathname === '/admin/api/check-now' && request.method === 'POST') {
+      // SECURITY: Only allow session-based access from admin panel
+      // API token access is disabled for maximum security
+      const cookieHeader = request.headers.get('cookie') || '';
+      const hasValidSession = cookieHeader.includes('admin_session=');
+
+      if (!hasValidSession) {
+        return new Response(JSON.stringify({ error: 'Unauthorized. Access only allowed from admin panel.' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
         });
-      } catch (error) {
-        return Response.json({ error: error.message }, { status: 500 });
       }
+
+      // Check native rate limits (both admin and newsletter check)
+      const endpoint = url.pathname.split('/').pop(); // Get the endpoint name
+      const nativeCheck = await checkNativeAdminRateLimit(request, env, endpoint);
+      if (!nativeCheck.allowed) {
+        return new Response(JSON.stringify({
+          error: nativeCheck.reason || 'Admin API rate limit exceeded',
+          message: 'Please wait before making another request',
+          retryAfter: 60
+        }), {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': '60'
+          }
+        });
+      }
+
+      // Also check newsletter-specific rate limit
+      const newsletterCheck = await checkNativeNewsletterCheckLimit(request, env);
+      if (!newsletterCheck.allowed) {
+        return new Response(JSON.stringify({
+          error: newsletterCheck.reason || 'Newsletter check rate limit exceeded',
+          message: 'Please wait before checking for newsletters again',
+          retryAfter: 60
+        }), {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': '60'
+          }
+        });
+      }
+
+      console.log('Manual newsletter check triggered via admin API');
+      const result = await dailyRun(env, config);
+      return new Response(JSON.stringify({
+        success: true,
+        message: 'Newsletter check completed',
+        timestamp: new Date().toISOString()
+      }), {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
     }
-    
-    // 404
+
+    // Maintenance and cleanup endpoints removed - TTL handles cleanup automatically
+
+    // D1 Backup endpoint removed - D1 database handles backups automatically
+
+
+    // Admin pages (require authentication)
+    if (url.pathname === '/admin/status') {
+      // Verify admin session
+      const cookieHeader = request.headers.get('cookie') || '';
+      if (!cookieHeader.includes('admin_session=')) {
+        return new Response('Unauthorized - Please login at /admin first', {
+          status: 401,
+          headers: {
+            'Content-Type': 'text/plain'
+          }
+        });
+      }
+
+      // Check native admin rate limit for status endpoint
+      const nativeCheck = await checkNativeAdminRateLimit(request, env, 'status');
+      if (!nativeCheck.allowed) {
+        return new Response(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Rate Limited</title>
+            <style>
+              body { font-family: sans-serif; text-align: center; padding: 50px; }
+              .error { color: #d32f2f; }
+            </style>
+          </head>
+          <body>
+            <h1 class="error">Rate Limit Exceeded</h1>
+            <p>${nativeCheck.reason || 'Please wait before making another request'}</p>
+            <p>Retry after: 60 seconds</p>
+            <a href="/admin">Return to Admin Panel</a>
+          </body>
+          </html>
+        `, {
+          status: 429,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Retry-After': '60'
+          }
+        });
+      }
+
+      return await handleStatus(request, env, config);
+    }
+
+    if (url.pathname === '/admin/debug') {
+      // Verify admin session
+      const cookieHeader = request.headers.get('cookie') || '';
+      if (!cookieHeader.includes('admin_session=')) {
+        return new Response('Unauthorized - Please login at /admin first', {
+          status: 401,
+          headers: {
+            'Content-Type': 'text/plain'
+          }
+        });
+      }
+
+      // Check native admin rate limit for debug endpoint
+      const endpoint = url.pathname.split('/').pop(); // Get the endpoint name
+      const nativeCheck = await checkNativeAdminRateLimit(request, env, endpoint);
+      if (!nativeCheck.allowed) {
+        return new Response(JSON.stringify({
+          error: nativeCheck.reason || 'Admin API rate limit exceeded',
+          message: 'Please wait before making another request',
+          retryAfter: 60
+        }), {
+          status: 429,
+          headers: {
+            'Content-Type': 'application/json',
+            'Retry-After': '60'
+          }
+        });
+      }
+
+      const debug = {
+        environment: {
+          hasKV: !!env.KV,
+          emailProvider: config.EMAIL_PROVIDER,
+          configValid: configValidation.valid
+        },
+        configuration: {
+          RSS_FEED_URL: !!config.RSS_FEED_URL,
+          BATCH_SIZE: config.BATCH_SIZE,
+          BATCH_WAIT_MINUTES: config.BATCH_WAIT_MINUTES,
+          MAX_POSTS_PER_RUN: config.MAX_POSTS_PER_RUN
+        },
+        prefixes: {
+          SUBSCRIBER: config.PREFIX_SUBSCRIBER,
+          EMAIL_QUEUE: config.PREFIX_EMAIL_QUEUE,
+          NEWSLETTER_SENT: config.PREFIX_NEWSLETTER_SENT,
+          CONTACT: config.PREFIX_CONTACT
+        },
+        paths: {
+          SUBSCRIBE: config.SUBSCRIBE_WEB_PATH,
+          UNSUBSCRIBE: config.UNSUBSCRIBE_WEB_PATH,
+          CONTACT: config.CONTACT_WEB_PATH
+        },
+        secrets: {
+          GMAIL_USER: !!config.GMAIL_USER,
+          GMAIL_PASSWORD: !!config.GMAIL_PASSWORD,
+          TURNSTILE_SITE_KEY: !!config.TURNSTILE_SITE_KEY,
+          TURNSTILE_SECRET_KEY: !!config.TURNSTILE_SECRET_KEY
+        },
+        timestamp: new Date().toISOString()
+      };
+
+      // Return styled HTML page
+      const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Information</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #667eea;
+            margin-top: 0;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .value {
+            color: #666;
+            font-family: 'Courier New', monospace;
+            word-break: break-all;
+        }
+        .status {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .status.true {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.false {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .timestamp {
+            text-align: center;
+            color: white;
+            margin-top: 20px;
+            opacity: 0.9;
+        }
+        .back-link {
+            display: inline-block;
+            color: white;
+            text-decoration: none;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Home</a>
+        <h1>🐛 Debug Information</h1>
+
+        <div class="section">
+            <h2>Environment</h2>
+            <div class="grid">
+                <div class="item">
+                    <div class="label">KV Storage</div>
+                    <div class="value"><span class="status ${debug.environment.hasKV}">${debug.environment.hasKV ? '✓ Available' : '✗ Not Available'}</span></div>
+                </div>
+                <div class="item">
+                    <div class="label">Email Provider</div>
+                    <div class="value">${debug.environment.emailProvider}</div>
+                </div>
+                <div class="item">
+                    <div class="label">Configuration Valid</div>
+                    <div class="value"><span class="status ${debug.environment.configValid}">${debug.environment.configValid ? '✓ Valid' : '✗ Invalid'}</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Configuration</h2>
+            <div class="grid">
+                ${Object.entries(debug.configuration).map(([key, value]) => `
+                <div class="item">
+                    <div class="label">${key.replace(/_/g, ' ')}</div>
+                    <div class="value">${value}</div>
+                </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>KV Prefixes</h2>
+            <div class="grid">
+                ${Object.entries(debug.prefixes).map(([key, value]) => `
+                <div class="item">
+                    <div class="label">${key}</div>
+                    <div class="value">${value}</div>
+                </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Web Paths</h2>
+            <div class="grid">
+                ${Object.entries(debug.paths).map(([key, value]) => `
+                <div class="item">
+                    <div class="label">${key.replace(/_/g, ' ')}</div>
+                    <div class="value"><a href="${value}" style="color: #667eea;">${value}</a></div>
+                </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Secrets Status</h2>
+            <div class="grid">
+                ${Object.entries(debug.secrets).map(([key, value]) => `
+                <div class="item">
+                    <div class="label">${key.replace(/_/g, ' ')}</div>
+                    <div class="value"><span class="status ${value}">${value ? '✓ Configured' : '✗ Not Configured'}</span></div>
+                </div>
+                `).join('')}
+            </div>
+        </div>
+
+        <div class="timestamp">
+            Generated at ${debug.timestamp}
+        </div>
+    </div>
+</body>
+</html>`;
+
+      return new Response(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      });
+    }
+
+    // Default home page
+    if (url.pathname === '/') {
+      return new Response(getHomePage(config), {
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'X-Robots-Tag': 'noindex, nofollow, noarchive, nosnippet, noimageindex'
+        }
+      });
+    }
+
+    // 404 for unknown paths
     return new Response('Not Found', { status: 404 });
+
+  } catch (error) {
+    console.error('Request handler error:', error);
+    return new Response(JSON.stringify({
+      error: 'Internal Server Error'
+      // Never expose error details in production
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
+}
+
+/**
+ * Scheduled handler for cron triggers
+ */
+async function handleScheduled(event, env, ctx) {
+  const config = buildConfig(env);
+
+  try {
+    console.log('Cron triggered: ' + event.cron);
+
+    const now = new Date();
+
+    // Check for newsletters (lightweight)
+    const lastNewsletterCheck = await env.KV.get(`${config.KEEP_PREFIX_DAILY}lastNewsletterCheck`);
+
+    if (!lastNewsletterCheck || (now.getTime() - new Date(lastNewsletterCheck).getTime()) > 60 * 60 * 1000) {
+      // Run newsletter check if it's been more than an hour
+      await env.KV.put(`${config.KEEP_PREFIX_DAILY}lastNewsletterCheck`, now.toISOString());
+
+      // Run in background to not block
+      ctx.waitUntil(dailyRun(env, config));
+    }
+
+    // Store last daily run
+    await env.KV.put(`${config.KEEP_PREFIX_DAILY}run`, JSON.stringify({
+      cron: event.cron,
+      timestamp: new Date().toISOString()
+    }));
+
+  } catch (error) {
+    console.error('Scheduled handler error:', error);
+
+    // Store error for debugging
+    await env.KV.put('error:last', JSON.stringify({
+      type: 'scheduled',
+      cron: event.cron,
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    }), {
+      expirationTtl: config.TTL_ERROR_LOGS // Use config for 7 days TTL
+    });
+  }
+}
+
+/**
+ * Get home page HTML
+ */
+function getHomePage(config) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newsletter & Contact Management System</title>
+
+    <!-- Prevent all search engine indexing and crawling -->
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, nocache">
+    <meta name="googlebot" content="noindex, nofollow, noarchive, nosnippet, noimageindex, max-snippet:0">
+    <meta name="bingbot" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+
+    <!-- Block AI crawlers -->
+    <meta name="GPTBot" content="noindex, nofollow">
+    <meta name="ChatGPT-User" content="noindex, nofollow">
+    <meta name="CCBot" content="noindex, nofollow">
+    <meta name="anthropic-ai" content="noindex, nofollow">
+    <meta name="Claude-Web" content="noindex, nofollow">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        .link-card {
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #333;
+            transition: all 0.3s ease;
+            text-align: center;
+        }
+        .link-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+            transform: translateY(-2px);
+        }
+        .link-card h3 {
+            margin: 10px 0 5px;
+            color: #667eea;
+        }
+        .link-card p {
+            margin: 0;
+            font-size: 14px;
+            color: #666;
+        }
+        .icon {
+            font-size: 32px;
+        }
+        .status {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .status h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        .status-item:last-child {
+            border-bottom: none;
+        }
+        .badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📬 Newsletter & Contact Management System</h1>
+        <p class="subtitle">Automated newsletter delivery powered by Cloudflare Workers</p>
+
+        <div class="links">
+            <a href="${config.SUBSCRIBE_WEB_PATH}" class="link-card">
+                <div class="icon">✉️</div>
+                <h3>Subscribe</h3>
+                <p>Join the newsletter</p>
+            </a>
+
+            <a href="${config.UNSUBSCRIBE_WEB_PATH}" class="link-card">
+                <div class="icon">👋</div>
+                <h3>Unsubscribe</h3>
+                <p>Leave the list</p>
+            </a>
+
+            <a href="${config.CONTACT_WEB_PATH}" class="link-card">
+                <div class="icon">💬</div>
+                <h3>Contact</h3>
+                <p>Get in touch</p>
+            </a>
+        </div>
+
+        <div class="status">
+            <h3>System Information</h3>
+            <div class="status-item">
+                <span>Email Provider</span>
+                <span class="badge">${config.EMAIL_PROVIDER}</span>
+            </div>
+            <div class="status-item">
+                <span>RSS Feed</span>
+                <span class="badge">${config.RSS_FEED_URL ? 'Configured' : 'Not Set'}</span>
+            </div>
+            <div class="status-item">
+                <span>Batch Size</span>
+                <span class="badge">${config.BATCH_SIZE}</span>
+            </div>
+            <div class="status-item">
+                <span>Bot Protection</span>
+                <span class="badge">${config.TURNSTILE_SITE_KEY ? 'Enabled' : 'Disabled'}</span>
+            </div>
+        </div>
+
+        <footer>
+            <p>Powered by Cloudflare Workers • Version 2.0 (Production Hardened)</p>
+            <p>© ${new Date().getFullYear()} ${config.SITE_OWNER}</p>
+            <p style="margin-top: 15px;">
+                <a href="/admin" style="color: #667eea; text-decoration: none; font-size: 12px;">🔐 Admin Panel</a>
+            </p>
+        </footer>
+    </div>
+</body>
+</html>`;
+}
+
+// Export the worker handlers
+export default {
+  fetch: handleFetch,
+  scheduled: handleScheduled
 };
-
-// HTML Pages
-function serveSubscribePage(env) {
-  return new Response(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Subscribe • ${env.SITE_OWNER}</title>
-      <script src="${env.TURNSTILE_API_URL}" async defer></script>
-      <style>
-        body { font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 600; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
-        button { width: 100%; padding: 14px; background: #4f46e5; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .message { margin-top: 20px; padding: 12px; border-radius: 6px; }
-        .success { background: #d1fae5; color: #065f46; }
-        .error { background: #fee2e2; color: #991b1b; }
-      </style>
-    </head>
-    <body>
-      <h1>Subscribe to Newsletter</h1>
-      <p>Get weekly insights on system design, algorithms, and software engineering.</p>
-      
-      <form id="subscribeForm">
-        <div class="form-group">
-          <label>Email Address</label>
-          <input type="email" id="email" required>
-        </div>
-        <div class="form-group">
-          <label>Name (optional)</label>
-          <input type="text" id="name">
-        </div>
-        
-        <div class="cf-turnstile" data-sitekey="YOUR_SITE_KEY_HERE"></div>
-        
-        <button type="submit">Subscribe</button>
-        
-        <div id="message" class="message" style="display: none;"></div>
-      </form>
-      
-      <p style="margin-top: 30px;"><a href="/">← Back to Home</a></p>
-      
-      <script>
-        document.getElementById('subscribeForm').addEventListener('submit', async (e) => {
-          e.preventDefault();
-          
-          const btn = e.target.querySelector('button');
-          const originalText = btn.textContent;
-          btn.textContent = 'Subscribing...';
-          btn.disabled = true;
-          
-          const data = {
-            email: document.getElementById('email').value,
-            name: document.getElementById('name').value || ''
-          };
-          
-          try {
-            const response = await fetch('/api/subscribe', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(data)
-            });
-            
-            const result = await response.json();
-            const message = document.getElementById('message');
-            message.style.display = 'block';
-            message.textContent = result.message || result.error;
-            message.className = 'message ' + (response.ok ? 'success' : 'error');
-            
-            if (response.ok) {
-              document.getElementById('subscribeForm').reset();
-            }
-          } catch (error) {
-            const message = document.getElementById('message');
-            message.style.display = 'block';
-            message.textContent = 'Network error. Please try again.';
-            message.className = 'message error';
-          } finally {
-            btn.textContent = originalText;
-            btn.disabled = false;
-          }
-        });
-      </script>
-    </body>
-    </html>
-  `, { headers: { 'Content-Type': 'text/html' } });
-}
-
-function serveUnsubscribePage(env) {
-  return new Response(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Unsubscribe • ${env.SITE_OWNER}</title>
-      <style>
-        body { font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 600; }
-        input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
-        button { width: 100%; padding: 14px; background: #ef4444; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .message { margin-top: 20px; padding: 12px; border-radius: 6px; }
-        .success { background: #d1fae5; color: #065f46; }
-        .error { background: #fee2e2; color: #991b1b; }
-      </style>
-    </head>
-    <body>
-      <h1>Unsubscribe</h1>
-      <p>We're sorry to see you go. Enter your email to unsubscribe.</p>
-      
-      <form id="unsubscribeForm">
-        <div class="form-group">
-          <label>Email Address</label>
-          <input type="email" id="email" required>
-        </div>
-        
-        <button type="submit">Unsubscribe</button>
-        
-        <div id="message" class="message" style="display: none;"></div>
-      </form>
-      
-      <p style="margin-top: 30px;"><a href="/">← Back to Home</a> • <a href="/subscribe">Resubscribe</a></p>
-      
-      <script>
-        document.getElementById('unsubscribeForm').addEventListener('submit', async (e) => {
-          e.preventDefault();
-          
-          const btn = e.target.querySelector('button');
-          const originalText = btn.textContent;
-          btn.textContent = 'Processing...';
-          btn.disabled = true;
-          
-          const data = {
-            email: document.getElementById('email').value
-          };
-          
-          try {
-            const response = await fetch('/api/unsubscribe', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(data)
-            });
-            
-            const result = await response.json();
-            const message = document.getElementById('message');
-            message.style.display = 'block';
-            message.textContent = result.message || result.error;
-            message.className = 'message ' + (response.ok ? 'success' : 'error');
-            
-            if (response.ok) {
-              document.getElementById('unsubscribeForm').reset();
-            }
-          } catch (error) {
-            const message = document.getElementById('message');
-            message.style.display = 'block';
-            message.textContent = 'Network error. Please try again.';
-            message.className = 'message error';
-          } finally {
-            btn.textContent = originalText;
-            btn.disabled = false;
-          }
-        });
-      </script>
-    </body>
-    </html>
-  `, { headers: { 'Content-Type': 'text/html' } });
-}
-
-function serveContactPage(env) {
-  return new Response(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Contact • ${env.SITE_OWNER}</title>
-      <script src="${env.TURNSTILE_API_URL}" async defer></script>
-      <style>
-        body { font-family: -apple-system, sans-serif; max-width: 500px; margin: 0 auto; padding: 40px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 600; }
-        input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 16px; }
-        textarea { min-height: 150px; resize: vertical; }
-        button { width: 100%; padding: 14px; background: #10b981; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
-        .message { margin-top: 20px; padding: 12px; border-radius: 6px; }
-        .success { background: #d1fae5; color: #065f46; }
-        .error { background: #fee2e2; color: #991b1b; }
-      </style>
-    </head>
-    <body>
-      <h1>Contact ${env.SITE_OWNER}</h1>
-      <p>Have questions or feedback? Send me a message!</p>
-      
-      <form id="contactForm">
-        <div class="form-group">
-          <label>Name</label>
-          <input type="text" id="name" required>
-        </div>
-        <div class="form-group">
-          <label>Email</label>
-          <input type="email" id="email" required>
-        </div>
-        <div class="form-group">
-          <label>Subject</label>
-          <input type="text" id="subject" required>
-        </div>
-        <div class="form-group">
-          <label>Message</label>
-          <textarea id="message" required></textarea>
-        </div>
-        
-        <div class="cf-turnstile" data-sitekey="YOUR_SITE_KEY_HERE"></div>
-        
-        <button type="submit">Send Message</button>
-        
-        <div id="responseMessage" class="message" style="display: none;"></div>
-      </form>
-      
-      <p style="margin-top: 30px;"><a href="/">← Back to Home</a></p>
-      
-      <script>
-        document.getElementById('contactForm').addEventListener('submit', async (e) => {
-          e.preventDefault();
-          
-          const btn = e.target.querySelector('button');
-          const originalText = btn.textContent;
-          btn.textContent = 'Sending...';
-          btn.disabled = true;
-          
-          const data = {
-            name: document.getElementById('name').value,
-            email: document.getElementById('email').value,
-            subject: document.getElementById('subject').value,
-            message: document.getElementById('message').value
-          };
-          
-          try {
-            const response = await fetch('/api/contact', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(data)
-            });
-            
-            const result = await response.json();
-            const messageDiv = document.getElementById('responseMessage');
-            messageDiv.style.display = 'block';
-            messageDiv.textContent = result.message || result.error;
-            messageDiv.className = 'message ' + (response.ok ? 'success' : 'error');
-            
-            if (response.ok) {
-              document.getElementById('contactForm').reset();
-            }
-          } catch (error) {
-            const messageDiv = document.getElementById('responseMessage');
-            messageDiv.style.display = 'block';
-            messageDiv.textContent = 'Network error. Please try again.';
-            messageDiv.className = 'message error';
-          } finally {
-            btn.textContent = originalText;
-            btn.disabled = false;
-          }
-        });
-      </script>
-    </body>
-    </html>
-  `, { headers: { 'Content-Type': 'text/html' } });
-}
-
-// API Handlers
-async function handleSubscribe(request, env) {
-  try {
-    const data = await request.json();
-    const email = data.email?.trim();
-    
-    // Basic validation
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return Response.json({ error: 'Valid email address required' }, { status: 400 });
-    }
-    
-    // For now, just log and return success
-    console.log(`[SUBSCRIBE] New subscription: ${email}`);
-    
-    return Response.json({
-      success: true,
-      message: 'Subscription successful! (Demo mode - email will be stored in production)'
-    });
-  } catch (error) {
-    return Response.json({ error: 'Subscription failed' }, { status: 500 });
-  }
-}
-
-async function handleUnsubscribe(request, env) {
-  try {
-    const data = await request.json();
-    const email = data.email?.trim();
-    
-    if (!email) {
-      return Response.json({ error: 'Email required' }, { status: 400 });
-    }
-    
-    console.log(`[UNSUBSCRIBE] Request: ${email}`);
-    
-    return Response.json({
-      success: true,
-      message: 'Unsubscribed successfully! (Demo mode)'
-    });
-  } catch (error) {
-    return Response.json({ error: 'Unsubscribe failed' }, { status: 500 });
-  }
-}
-
-async function handleContact(request, env) {
-  try {
-    const data = await request.json();
-    
-    console.log(`[CONTACT] Message from: ${data.name} <${data.email}>`);
-    console.log(`[CONTACT] Subject: ${data.subject}`);
-    console.log(`[CONTACT] Message: ${data.message.substring(0, 100)}...`);
-    
-    return Response.json({
-      success: true,
-      message: 'Message received! (Demo mode - will send email in production)'
-    });
-  } catch (error) {
-    return Response.json({ error: 'Message sending failed' }, { status: 500 });
-  }
-}

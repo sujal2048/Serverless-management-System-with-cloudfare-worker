@@ -1,0 +1,48 @@
+{
+  "name": "serverless-management-system-with-cloudfare-worker",
+  "version": "2.0.0",
+  "description": "V2 Newsletter System with Cloudflare Workers - ES Modules, D1 Database, Scheduled Tasks",
+  "type": "module",       
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:prod": "wrangler deploy --env production",
+    "tail": "wrangler tail --format pretty",
+    "types": "wrangler types",
+    "test": "node test-v2.js",
+    "db:init": "wrangler d1 execute newsletter_db --file schema.sql",
+    "db:query": "wrangler d1 execute newsletter_db",
+    "kv:list": "wrangler kv:namespace list",
+    "lint": "eslint src/",
+    "format": "prettier --write src/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sujal2048/Serverless-management-System-with-cloudfare-worker.git"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "newsletter",
+    "serverless",
+    "v2",
+    "d1",
+    "kv"
+  ],
+  "author": "Sujal Gupta",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sujal2048/Serverless-management-System-with-cloudfare-worker/issues"
+  },
+  "homepage": "https://github.com/sujal2048/Serverless-management-System-with-cloudfare-worker#readme",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260103.0",
+    "wrangler": "^4.54.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
