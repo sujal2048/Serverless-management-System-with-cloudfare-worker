@@ -5,163 +5,60 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 [triggers]
-crons = [
-  "0 */6 * * *",  # Every 6 hours for newsletter checks
-  "0 0 * * sat"   # Weekly newsletter at Saturday midnight
-]
+crons = ["0 */6 * * *"]  # Every 6 hours
 
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_YOUR_KV_ID"  # Run: npx wrangler kv:namespace create "KV"
-preview_id = "REPLACE_WITH_YOUR_KV_ID"
+id = "REPLACE_WITH_KV_ID"
+preview_id = "REPLACE_WITH_KV_ID"
 
 [[d1_databases]]
 binding = "D1"
-database_name = "sujal_newsletter_db"
-database_id = "REPLACE_WITH_YOUR_D1_ID"  # Run: npx wrangler d1 create "sujal_newsletter_db"
+database_name = "newsletter_db"
+database_id = "REPLACE_WITH_D1_ID"
 
 [vars]
-# System Configuration
-WORKER_VERSION = "2.0.0"
-APP_NAME = "Sujal's Tech Garden Newsletter"
-APP_DESCRIPTION = "Weekly newsletter on system design, algorithms, and software engineering"
+# Basic Configuration
+WORKER_VERSION = "1.0.0"
+APP_NAME = "Sujal Gupta's Tech Newsletter"
+ENVIRONMENT = "production"
 
-# Email Provider Configuration - 'gmail', 'worker-email', or 'mailerlite'
+# Email Configuration
 EMAIL_PROVIDER = "gmail"
+EMAIL_FROM_NAME = "Sujal Gupta"
+EMAIL_REPLY_TO = "REPLACE_WITH_YOUR_EMAIL"
 
-# Gmail SMTP Configuration
-GMAIL_HOST = "smtp.gmail.com"
-GMAIL_PORT = 587
-
-# Common Email Configuration
-EMAIL_FROM_NAME = "Sujal Gupta's Tech Garden"
-EMAIL_SIGNATURE = "--\nSujal Gupta\nTCS Software Engineer | CodeChef Problem Setter\nhttps://sujal2048.github.io"
-
-# RSS Feed Configuration
+# RSS Configuration
 RSS_FEED_URL = "https://sujal2048.github.io/index.xml"
-USER_AGENT = "Sujal-Newsletter-Bot/2.0"
-FETCH_TIMEOUT_MS = 60000
+USER_AGENT = "Sujal-Newsletter-Bot/1.0"
+FETCH_TIMEOUT_MS = 30000
 
-# Newsletter Content Configuration
-NEWSLETTER_TEMPLATE = "minimal-dark"  # Options: minimal-dark, tech, clean
-INCLUDE_AUTHOR_BIO = true
-INCLUDE_PROJECT_LINKS = true
-INCLUDE_CATEGORY_TAGS = true
-
-# Email Limits
+# Rate Limiting
 GMAIL_DAILY_LIMIT = 490
 GMAIL_PER_MINUTE_LIMIT = 20
 BATCH_SIZE = 95
 BATCH_WAIT_MINUTES = 3
-MAX_POSTS_PER_RUN = 2
+MAX_POSTS_PER_RUN = 1
 
-# KV Storage Prefixes
-PREFIX_SUBSCRIBER = "subscriber:"
-PREFIX_EMAIL_QUEUE = "email-queue:"
-PREFIX_NEWSLETTER_SENT = "newsletter-sent:"
-PREFIX_NEWSLETTER_SENT_URL = "newsletter-sent-url:"
-PREFIX_CONTACT = "contact:"
-PREFIX_BOT_DETECT = "bot-detect:"
-PREFIX_STATS = "stats:"
-PREFIX_LAST_CHECK = "last-check:"
+# Site Configuration
+SITE_URL = "https://sujal2048.github.io"
+SITE_OWNER = "Sujal Gupta"
+GITHUB_REPO_URL = "https://github.com/sujal2048/sujal2048.github.io"
 
-# Cleanup Configuration
-CLEANUP_ENABLED = true
-CLEANUP_INTERVAL_DAYS = 7
-MAX_SUBSCRIBER_INACTIVITY_DAYS = 365
-
-# URL Paths
+# Paths
 SUBSCRIBE_WEB_PATH = "/subscribe"
 SUBSCRIBE_API_PATH = "/api/subscribe"
 UNSUBSCRIBE_WEB_PATH = "/unsubscribe"
 UNSUBSCRIBE_API_PATH = "/api/unsubscribe"
 CONTACT_WEB_PATH = "/contact"
 CONTACT_API_PATH = "/api/contact"
-ADMIN_PATH = "/admin"
 STATUS_PATH = "/status"
-NEWSLETTER_CHECK_PATH = "/api/check-now"
-
-# Site Configuration
-SITE_URL = "https://sujal2048.github.io"
-BLOG_URL = "https://sujal2048.github.io"
-POSTS_BASE_URL = "https://sujal2048.github.io/posts"
-SITE_OWNER = "Sujal Gupta"
-SITE_OWNER_TITLE = "Software Engineer (Innovator) @ TCS | CodeChef Problem Setter"
-GITHUB_REPO_URL = "https://github.com/sujal2048/sujal2048.github.io"
-NEWSLETTER_REPO_URL = "https://github.com/sujal2048/newsletter-system"
-
-# Author Bio Configuration
-AUTHOR_BIO = "TCS Software Engineer working on low-latency exchange systems. Former CodeChef Problem Setter. Passionate about algorithms, system design, and building scalable software."
-AUTHOR_SKILLS = "GoLang, C++, System Design, Algorithms, Kafka, Linux, Distributed Systems"
-AUTHOR_PROJECTS = "Auto Complete Trie, Serverless Newsletter System, NSE/BSE Exchange Simulator"
 
 # Turnstile Configuration
 TURNSTILE_API_URL = "https://challenges.cloudflare.com/turnstile/v0/api.js"
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
-TURNSTILE_THEME = "dark"  # dark, light, auto
+TURNSTILE_THEME = "dark"
 
-# Newsletter Templates
-NEWSLETTER_HEADER_TEMPLATE = """
-<div style="background: #0d1117; color: #c9d1d9; padding: 30px; border-radius: 12px; border: 1px solid #30363d; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;">
-    <h1 style="color: #58a6ff; margin-bottom: 10px;">📬 {title}</h1>
-    <p style="color: #8b949e; margin-bottom: 20px;">{date} • {read_time} min read</p>
-"""
-
-NEWSLETTER_FOOTER_TEMPLATE = """
-    <hr style="border: none; border-top: 1px solid #30363d; margin: 40px 0;">
-    
-    <div style="background: rgba(88, 166, 255, 0.1); border-left: 4px solid #58a6ff; padding: 20px; border-radius: 0 8px 8px 0;">
-        <h3 style="color: #58a6ff; margin-bottom: 15px;">About the Author</h3>
-        <p style="color: #c9d1d9; margin-bottom: 10px;"><strong>Sujal Gupta</strong> — {bio}</p>
-        <p style="color: #8b949e; font-size: 0.9em;">Skills: {skills}</p>
-        <p style="color: #8b949e; font-size: 0.9em;">Projects: {projects}</p>
-    </div>
-    
-    <div style="margin-top: 30px; text-align: center;">
-        <p style="color: #8b949e; font-size: 0.9em;">
-            You received this email because you subscribed to <strong>Sujal's Tech Garden</strong>.<br>
-            <a href="{unsubscribe_url}" style="color: #58a6ff;">Unsubscribe</a> • 
-            <a href="{blog_url}" style="color: #58a6ff;">View on Web</a> • 
-            <a href="{rss_url}" style="color: #58a6ff;">RSS Feed</a>
-        </p>
-        <p style="color: #6b7280; font-size: 0.8em; margin-top: 20px;">
-            © {year} Sujal Gupta • NIT Durgapur • TCS • CodeChef
-        </p>
-    </div>
-</div>
-"""
-
-# Post Categories Configuration
-CATEGORIES = {
-    "system-design": "□ System-Design",
-    "algorithms": "□ Algorithms", 
-    "projects": "□ Projects",
-    "distributed-systems": "□ Distributed-Systems",
-    "golang": "□ GoLang",
-    "cpp": "□ C++",
-    "linux": "□ Linux",
-    "competitive-programming": "□ Competitive-Programming"
-}
-
-# Retry Configuration
-RETRY_INITIAL_DELAY = 1000
-RETRY_MAX_DELAY = 30000
-RETRY_BACKOFF_MULTIPLIER = 2
-RETRY_MAX_ATTEMPTS = 3
-CIRCUIT_BREAKER_RESET_TIMEOUT = 60000
-
-# Timeout Configuration
-GMAIL_TIMEOUT_MS = 30000
-CACHE_CONTROL_MAX_AGE = 3600
-CORS_MAX_AGE = 86400
-
-# Analytics Configuration
-ANALYTICS_ENABLED = true
-ANALYTICS_RETENTION_DAYS = 90
-TRACK_OPEN_RATES = true
-TRACK_CLICK_RATES = true
-
-# Workers Logs and Traces
 [observability]
 enabled = true
 
@@ -171,295 +68,18 @@ head_sampling_rate = 1
 persist = true
 invocation_logs = true
 
-[observability.traces]
-enabled = false
-head_sampling_rate = 1
-persist = true
-
-# ===================================================================
-# SECRETS TO CONFIGURE
-# ===================================================================
-# Required for all providers:
-# 1. EMAIL_FROM_ADDRESS - From email address
-# 2. EMAIL_REPLY_TO - Reply-to email address
-# 3. TURNSTILE_SITE_KEY - Cloudflare Turnstile site key
-# 4. TURNSTILE_SECRET_KEY - Cloudflare Turnstile secret key
-# 5. ADMIN_TOKEN - Admin access token (optional)
-
-# For Gmail provider:
-# 6. GMAIL_USER - Gmail address for SMTP authentication
-# 7. GMAIL_PASSWORD - Gmail App Password
-
-# For MailerLite provider:
-# 8. MAILERLITE_API_TOKEN - MailerLite API token
-
-# Run: npx wrangler secret put SECRET_NAME
-# ===================================================================
-
-# ===================================================================
-# NATIVE RATE LIMITING CONFIGURATION
-# ===================================================================
-# Global rate limiting
+# Rate Limiters
 [[ratelimits]]
 name = "GLOBAL_RATE_LIMITER"
 namespace_id = "1001"
 simple = { limit = 30, period = 60 }
 
-# Form submission rate limiting
 [[ratelimits]]
 name = "FORM_RATE_LIMITER"
 namespace_id = "1002"
 simple = { limit = 3, period = 60 }
 
-# Newsletter API rate limiting
 [[ratelimits]]
-name = "NEWSLETTER_API_LIMITER"
+name = "API_RATE_LIMITER"
 namespace_id = "1003"
 simple = { limit = 10, period = 60 }
-
-# Bot protection
-[[ratelimits]]
-name = "BOT_RATE_LIMITER"
-namespace_id = "1004"
-simple = { limit = 1, period = 60 }
-
-# Admin endpoints protection
-[[ratelimits]]
-name = "ADMIN_RATE_LIMITER"
-namespace_id = "1005"
-simple = { limit = 5, period = 60 }
-
-# RSS feed check protection
-[[ratelimits]]
-name = "RSS_CHECK_LIMITER"
-namespace_id = "1006"
-simple = { limit = 2, period = 60 }
-
-# Contact form protection
-[[ratelimits]]
-name = "CONTACT_RATE_LIMITER"
-namespace_id = "1007"
-simple = { limit = 2, period = 60 }
-
-# Burst protection
-[[ratelimits]]
-name = "BURST_RATE_LIMITER"
-namespace_id = "1010"
-simple = { limit = 10, period = 10 }
-
-# ===================================================================
-# EMAIL TEMPLATE CONFIGURATION
-# ===================================================================
-[email_templates]
-# Welcome email for new subscribers
-welcome_subject = "Welcome to Sujal's Tech Garden Newsletter 🚀"
-welcome_body = """
-Hello {name},
-
-Welcome to my newsletter! You'll now receive weekly insights on:
-
-• System Design & Architecture
-• Algorithms & Data Structures  
-• GoLang & C++ Best Practices
-• Real-world Projects & Case Studies
-• Career Advice for Software Engineers
-
-**About Me:**
-I'm Sujal Gupta, a Software Engineer at TCS working on low-latency exchange systems. 
-Previously, I was a Problem Setter at CodeChef. I share practical insights from my 
-day-to-day engineering challenges.
-
-**Recent Posts:**
-{recent_posts}
-
-**Useful Links:**
-• Blog: https://sujal2048.github.io
-• GitHub: https://github.com/sujal2048
-• LinkedIn: https://linkedin.com/in/sujalgupta
-
-You can unsubscribe anytime: {unsubscribe_url}
-
-Best regards,
-Sujal Gupta
-"""
-
-# Newsletter email template
-newsletter_subject = "📬 {post_title} | Sujal's Tech Garden"
-newsletter_body = """
-{newsletter_header}
-
-<div style="max-width: 600px; margin: 0 auto;">
-    <h2 style="color: #58a6ff;">{post_title}</h2>
-    
-    <div style="color: #8b949e; margin-bottom: 30px; font-size: 0.9em;">
-        <span>📅 {post_date}</span> • 
-        <span>📖 {read_time} min read</span> • 
-        <span>🏷️ {category}</span>
-    </div>
-    
-    {post_content}
-    
-    <div style="margin-top: 40px; padding: 20px; background: rgba(139, 148, 158, 0.1); border-radius: 8px;">
-        <h3 style="color: #58a6ff; margin-bottom: 15px;">💡 Key Takeaways</h3>
-        {key_takeaways}
-    </div>
-    
-    <div style="margin-top: 40px; text-align: center;">
-        <a href="{post_url}" style="background: #58a6ff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-            Read Full Article on Web
-        </a>
-    </div>
-</div>
-
-{newsletter_footer}
-"""
-
-# Unsubscribe confirmation
-unsubscribe_subject = "Sorry to see you go 😔"
-unsubscribe_body = """
-Hi {name},
-
-You have been unsubscribed from Sujal's Tech Garden newsletter.
-
-We're sorry to see you go! If this was a mistake, you can resubscribe here:
-{resubscribe_url}
-
-You can also adjust your email preferences or contact me directly:
-• Contact Form: {contact_url}
-• Email: {admin_email}
-
-Thank you for being part of our community.
-
-Best,
-Sujal Gupta
-"""
-
-# Contact form confirmation
-contact_subject = "Thanks for reaching out! 🙏"
-contact_body = """
-Hi {name},
-
-Thank you for contacting me! I've received your message:
-
-**Subject:** {subject}
-**Message:** {message}
-
-I'll get back to you within 2-3 business days.
-
-In the meantime, you might find these resources helpful:
-• Blog: https://sujal2048.github.io
-• Newsletter: {newsletter_url}
-• GitHub Projects: https://github.com/sujal2048
-
-Best regards,
-Sujal Gupta
-"""
-
-# ===================================================================
-# DATABASE SCHEMA CONFIGURATION
-# ===================================================================
-[database_schema]
-subscribers_table = """
-CREATE TABLE IF NOT EXISTS subscribers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,
-    name TEXT,
-    subscribed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    unsubscribed_at DATETIME,
-    is_active BOOLEAN DEFAULT 1,
-    verification_token TEXT,
-    verified_at DATETIME,
-    source TEXT DEFAULT 'website',
-    metadata TEXT DEFAULT '{}'
-);
-"""
-
-newsletters_table = """
-CREATE TABLE IF NOT EXISTS sent_newsletters (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    post_url TEXT UNIQUE NOT NULL,
-    post_title TEXT NOT NULL,
-    post_date DATETIME NOT NULL,
-    sent_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    recipients_count INTEGER DEFAULT 0,
-    open_count INTEGER DEFAULT 0,
-    click_count INTEGER DEFAULT 0,
-    category TEXT
-);
-"""
-
-contacts_table = """
-CREATE TABLE IF NOT EXISTS contact_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL,
-    subject TEXT NOT NULL,
-    message TEXT NOT NULL,
-    received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    is_read BOOLEAN DEFAULT 0,
-    ip_address TEXT,
-    user_agent TEXT
-);
-"""
-
-analytics_table = """
-CREATE TABLE IF NOT EXISTS analytics (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_type TEXT NOT NULL,
-    event_data TEXT DEFAULT '{}',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    ip_address TEXT,
-    user_agent TEXT
-);
-"""
-
-# ===================================================================
-# DEPLOYMENT CONFIGURATION
-# ===================================================================
-[deployment]
-environment = "production"
-region = "auto"
-log_level = "info"
-
-[deployment.variables.production]
-ENVIRONMENT = "production"
-LOG_LEVEL = "info"
-
-[deployment.variables.staging]
-ENVIRONMENT = "staging"
-LOG_LEVEL = "debug"
-
-# Custom Domains (Optional)
-# [[routes]]
-# pattern = "newsletter.sujal.dev/*"
-# zone_id = "your_zone_id"
-# 
-# [[routes]]
-# pattern = "api.newsletter.sujal.dev/*"
-# zone_id = "your_zone_id"
-
-# ===================================================================
-# BUILD CONFIGURATION
-# ===================================================================
-[build]
-command = "npm run build"
-watch_dir = "src"
-watch_pattern = "*.js"
-
-[build.upload]
-format = "service-worker"
-dir = "dist"
-
-# ===================================================================
-# ALIASES (For custom URLs)
-# ===================================================================
-[env.production]
-name = "sujal-newsletter"
-workers_dev = false
-
-[env.production.routes]
-pattern = "newsletter.sujalgupta.tech/*"
-
-[env.staging]
-name = "sujal-newsletter-staging"
-workers_dev = true
