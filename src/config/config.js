@@ -401,7 +401,12 @@ export function isConfigValid(config) {
     errors.push(`Invalid EMAIL_PROVIDER: ${config.EMAIL_PROVIDER}. Must be 'gmail', 'worker-email', or 'mailerlite'`);
   }
 
- 
+  // Check required configurations
+  if (!config.RSS_FEED_URL) errors.push('RSS_FEED_URL is required');
+  if (!config.TURNSTILE_SITE_KEY) errors.push('TURNSTILE_SITE_KEY is required');
+  if (!config.TURNSTILE_SECRET_KEY) errors.push('TURNSTILE_SECRET_KEY is required');
+  // ADMIN_TOKEN is now optional - API access is disabled for maximum security
+
   return {
     valid: errors.length === 0,
     errors
