@@ -193,3 +193,8 @@ namespace_id = "1011"
 # 5 requests per 10 seconds (strict burst protection against automated attacks)
 simple = { limit = 5, period = 10 }
 
+===================================================================
+# SECRETS TO CONFIGURE IN CLOUDFLARE DASHBOARD
+# ===================================================================
+# The following secrets must be set in the Cloudflare Dashboard:
+#
