@@ -54,9 +54,7 @@ export async function protectRequest(request, env, config) {
   }
 
   // Get client IP
-  const clientIp = request.headers.get('cf-connecting-ip') ||
-                   request.headers.get('x-forwarded-for') ||
-                   'unknown';
+  
 
   // Check native rate limits based on endpoint type
   const pathname = url.pathname;
