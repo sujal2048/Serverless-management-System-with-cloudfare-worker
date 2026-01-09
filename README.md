@@ -2,6 +2,12 @@
 
 A production-ready, serverless newsletter and contact form management system built on Cloudflare Workers with enterprise-grade security, dual-layer data persistence, and multiple email provider support.
 
+## 🌐 Live Links
+- **Website**: https://sujal2048.github.io
+- **RSS Feed**: https://sujal2048.github.io/index.xml
+- **Newsletter System**: https://sujal-newsletter.sujalgupta.workers.dev/
+
+
 ## 🚀 Features
 
 ### Core Functionality
